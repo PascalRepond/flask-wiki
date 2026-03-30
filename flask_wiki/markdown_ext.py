@@ -1,5 +1,5 @@
 # This file is part of Flask-Wiki
-# Copyright (C) 2025 RERO
+# Copyright (C) 2025-2026 RERO
 #
 # Flask-Wiki is free software; you can redistribute it and/or modify
 # it under the terms
@@ -11,10 +11,10 @@ from markdown.treeprocessors import Treeprocessor
 
 
 class BootstrapExtension(Extension):
-    """."""
+    """Python-Markdown extension that adds Bootstrap CSS classes to HTML elements."""
 
-    def extendMarkdown(self, md):  # noqa
-        """."""
+    def extendMarkdown(self, md):  # noqa: N802
+        """Register the Bootstrap tree processor with the Markdown instance."""
         md.registerExtension(self)
         self.processor = BootstrapTreeprocessor()
         self.processor.md = md
@@ -23,10 +23,14 @@ class BootstrapExtension(Extension):
 
 
 class BootstrapTreeprocessor(Treeprocessor):
-    """."""
+    """Tree processor that applies Bootstrap CSS classes to images and tables."""
 
     def run(self, node):
-        """."""
+        """Apply Bootstrap classes to all img and table elements in the parse tree.
+
+        :param node: the root element tree node
+        :returns: the modified element tree node
+        """
         for child in node.iter():
             if child.tag == "img":
                 child.set("class", "img-fluid mx-auto d-block")

@@ -47,7 +47,7 @@ def wikilink(text, url_formatter=None):
     """
     if url_formatter is None:
         url_formatter = url_for
-    link_regex = re.compile(r"((?<!\<code\>)\[\[([^<].+?) \s*([|] \s* (.+?) \s*)?]])", re.X | re.U)
+    link_regex = re.compile(r"((?<!\<code\>)\[\[([^<].+?) \s*([|] \s* (.+?) \s*)?]])", re.VERBOSE | re.UNICODE)
     for i in link_regex.findall(text):
         title = [i[-1] or i[1]][0]
         url = url_formatter("wiki.page", url=clean_url(i[1]))

@@ -1,5 +1,5 @@
 # This file is part of Flask-Wiki
-# Copyright (C) 2025 RERO
+# Copyright (C) 2025-2026 RERO
 #
 # Flask-Wiki is free software; you can redistribute it and/or modify
 # it under the terms of the Revised BSD License; see LICENSE file for
@@ -130,19 +130,24 @@ class TOC:
         self.tokens = tokens
 
     def __bool__(self):
-        """."""
+        """Return True if the table of contents has at least one section."""
         return bool(self.tokens)
 
     def __html__(self):
-        """."""
+        """Return the HTML string for use in Jinja2 templates."""
         return self._toc
 
 
 class Page:
     """A page of the wiki."""
 
-    def __init__(self, path, url, new=False):
-        """."""
+    def __init__(self, path, url, *, new=False):
+        """Initialize a wiki page.
+
+        :param path: filesystem path to the page file
+        :param str url: URL slug identifying the page
+        :param bool new: if True, skip loading and rendering (page does not exist yet)
+        """
         self.path = path
         self.url = url
         self._meta = OrderedDict()
@@ -152,12 +157,12 @@ class Page:
             self.render()
 
     def __repr__(self):
-        """."""
+        """Return a developer-readable string representation."""
         return f"<Page: {self.url}@{self.path}>"
 
     def load(self):
         """Load a page."""
-        with open(self.path, encoding="utf-8") as f:
+        with Path(self.path).open(encoding="utf-8") as f:
             self.content = f.read()
 
     def render(self):
@@ -166,8 +171,9 @@ class Page:
         self._html, self.body, self._meta, self.toc = processor.process()
 
         # Get creation and update times from file
-        self.creation_datetime = datetime.fromtimestamp(os.path.getctime(self.path))  # noqa
-        self.modification_datetime = datetime.fromtimestamp(os.path.getmtime(self.path))  # noqa
+        stat = Path(self.path).stat()
+        self.creation_datetime = datetime.fromtimestamp(stat.st_ctime)  # noqa: DTZ006
+        self.modification_datetime = datetime.fromtimestamp(stat.st_mtime)  # noqa: DTZ006
 
     def index(self):
         """Index page data for whoosh search engine."""
@@ -182,12 +188,15 @@ class Page:
         )
         writer.commit()
 
-    def save(self, update=True):
-        """Save a page."""
-        folder = os.path.dirname(self.path)
-        if not os.path.exists(folder):
-            os.makedirs(folder)
-        with open(self.path, "w", encoding="utf-8") as f:
+    def save(self, *, update=True):
+        """Save a page to disk and update the search index.
+
+        :param bool update: if True, reload and re-render the page after saving
+        """
+        folder = Path(self.path).parent
+        if not folder.exists():
+            folder.mkdir(parents=True)
+        with Path(self.path).open("w", encoding="utf-8") as f:
             for key, value in self._meta.items():
                 line = f"{key}: {value}\n"
                 f.write(line)
@@ -200,24 +209,32 @@ class Page:
 
     @property
     def meta(self):
-        """."""
+        """Return the page metadata as an ordered dictionary."""
         return self._meta
 
     def __getitem__(self, name):
-        """."""
+        """Return the metadata value for the given key.
+
+        :param str name: metadata key
+        :raises KeyError: if the key does not exist
+        """
         return self._meta[name]
 
     def __setitem__(self, name, value):
-        """."""
+        """Set a metadata value.
+
+        :param str name: metadata key
+        :param str value: metadata value
+        """
         self._meta[name] = value
 
     @property
     def html(self):
-        """."""
+        """Return the rendered HTML of the page body."""
         return self._html
 
     def __html__(self):
-        """."""
+        """Return the rendered HTML for use in Jinja2 templates."""
         return self.html
 
     @property
@@ -274,71 +291,118 @@ class WikiBase:
     """Utility class for wiki management methods."""
 
     def __init__(self, root):
-        """."""
+        """Initialize the wiki.
+
+        :param str root: filesystem path to the wiki content directory
+        """
         self.root = root
 
     def path(self, url):
-        """."""
-        return os.path.join(self.root, f"{url}.md")
+        """Return the filesystem path for a given page URL.
+
+        :param str url: the page URL slug
+        :returns: path to the corresponding .md file
+        :rtype: pathlib.Path
+        """
+        return Path(self.root) / f"{url}.md"
 
     def ln_path(self, url):
-        """."""
-        return os.path.join(self.root, f"{url}_{self.current_language}.md")
+        """Return the language-specific filesystem path for a given page URL.
+
+        :param str url: the page URL slug
+        :returns: path to the language-variant .md file
+        :rtype: pathlib.Path
+        """
+        return Path(self.root) / f"{url}_{self.current_language}.md"
 
     def exists(self, url):
-        """."""
-        path = self.path(url)
-        return os.path.exists(path)
+        """Return True if a page with the given URL exists on disk.
+
+        :param str url: the page URL slug
+        :rtype: bool
+        """
+        return self.path(url).exists()
 
     def get(self, url):
-        """."""
+        """Return the page for the given URL, preferring a language variant if available.
+
+        Returns the language-specific file (e.g. ``page_fr.md``) when it exists,
+        otherwise falls back to the base file (e.g. ``page.md``).
+        Returns None if neither file exists.
+
+        :param str url: the page URL slug
+        :returns: the page instance, or None if not found
+        :rtype: Page or None
+        """
         path = self.ln_path(url)
-        if os.path.isfile(path):
+        if path.is_file():
             return Page(path, url)
         path = self.path(url)
-        return Page(path, url) if os.path.isfile(path) else None
+        return Page(path, url) if path.is_file() else None
 
     def get_or_404(self, url):
-        """."""
+        """Return the page for the given URL, or abort with a 404 error.
+
+        :param str url: the page URL slug
+        :returns: the page instance
+        :rtype: Page
+        """
         if page := self.get(url):
             return page
         abort(404)
         return None
 
     def get_bare(self, url):
-        """."""
+        """Return a new, unsaved Page for a URL that does not yet exist.
+
+        Returns False if the URL already exists on disk.
+
+        :param str url: the page URL slug
+        :returns: a new Page instance, or False if the page already exists
+        :rtype: Page or bool
+        """
         path = self.path(url)
         return False if self.exists(url) else Page(path, url, new=True)
 
     def move(self, url, newurl):
-        """."""
-        source = f"{os.path.join(self.root, url)}.md"
-        target = f"{os.path.join(self.root, newurl)}.md"
-        # normalize root path (just in case somebody defined it absolute,
-        # having some '../' inside) to correctly compare it to the target
-        root = os.path.normpath(self.root)
-        # get root path longest common prefix with normalized target path
-        common = os.path.commonprefix((root, os.path.normpath(target)))
-        # common prefix length must be at least as root length is
-        # otherwise there are probably some '..' links in target path leading
-        # us outside defined root directory
-        if len(common) < len(root):
-            raise RuntimeError(f"Possible write attempt outside content directory: {newurl}")
-        # create folder if it does not exists yet
-        folder = os.path.dirname(target)
-        if not os.path.exists(folder):
-            os.makedirs(folder)
-        os.rename(source, target)
+        """Rename a page from one URL to another.
+
+        Creates any intermediate folders as needed. Raises RuntimeError if
+        the target path would escape the content directory.
+
+        :param str url: current URL slug of the page
+        :param str newurl: new URL slug for the page
+        :raises RuntimeError: if the target path escapes the content directory
+        """
+        source = Path(self.root) / f"{url}.md"
+        target = Path(self.root) / f"{newurl}.md"
+        # resolve root to normalize any '../' in the configured path
+        root = Path(self.root).resolve()
+        # ensure target does not escape the root directory (path traversal guard)
+        # is_relative_to() checks path components, unlike the string-prefix approach
+        if not target.resolve().is_relative_to(root):
+            msg = f"Possible write attempt outside content directory: {newurl}"
+            raise RuntimeError(msg)
+        # create folder if it does not exist yet
+        folder = target.parent
+        if not folder.exists():
+            folder.mkdir(parents=True)
+        source.rename(target)
 
     def delete(self, url):
-        """."""
+        """Delete a page and remove it from the search index.
+
+        :param str url: URL slug of the page to delete
+        :returns: True if deleted, False if the page did not exist
+        :rtype: bool
+        """
         path = self.path(url)
         if not self.exists(url):
             return False
-        os.remove(path)
+        path.unlink()
         index_dir = index.open_dir(current_app.config.get("WIKI_INDEX_DIR"))
         writer = AsyncWriter(index_dir)
-        writer.delete_by_term("path", path)
+        writer.delete_by_term("url", url)
         writer.commit()
         return True
 
@@ -353,8 +417,9 @@ class WikiBase:
             body=TEXT(stored=True, analyzer=LanguageAnalyzer("fr")),
             language=ID(stored=True),
         )
-        if not os.path.exists(index_dir):
-            os.mkdir(index_dir)
+        index_path = Path(index_dir)
+        if not index_path.exists():
+            index_path.mkdir()
         index.create_in(index_dir, schema)
 
     def search(self, query, ix, searcher):
@@ -388,14 +453,13 @@ class WikiBase:
         # make sure we always have the absolute path for fixing the
         # walk path
         pages = []
-        root = os.path.abspath(self.root)
+        root = Path(self.root).resolve()
         for cur_dir, _, files in os.walk(root):
-            # get the url of the current directory
-            cur_dir_url = cur_dir[len(root) + 1 :]
+            cur_dir_path = Path(cur_dir)
             for cur_file in files:
-                path = os.path.join(cur_dir, cur_file)
                 if cur_file.endswith(".md"):
-                    url = clean_url(os.path.join(cur_dir_url, cur_file[:-3]))
+                    path = cur_dir_path / cur_file
+                    url = clean_url(str(cur_dir_path.relative_to(root) / cur_file[:-3]))
                     page = Page(path, url)
                     pages.append(page)
         return sorted(pages, key=lambda x: x.title.lower())
@@ -436,7 +500,7 @@ class WikiBase:
         for page in pages:
             pagetags = page.tags.split(",")
             for tag in pagetags:
-                tag = tag.strip()
+                tag = tag.strip()  # noqa: PLW2901
                 if tag == "":
                     continue
                 if tags.get(tag):
@@ -453,20 +517,20 @@ class WikiBase:
 
     @property
     def current_language(self):
-        """."""
+        """Return the current language code from the application configuration."""
         return current_app.config.get("WIKI_CURRENT_LANGUAGE")()
 
     @property
     def languages(self):
-        """."""
+        """Return the configured language mapping (code to display name)."""
         return current_app.config.get("WIKI_LANGUAGES")
 
 
 def get_wiki():
-    """."""
+    """Return the wiki instance for the current request context, creating it if needed."""
     wiki = getattr(g, "_wiki", None)
     if wiki is None:
-        wiki = g._wiki = WikiBase(current_app.config["WIKI_CONTENT_DIR"])
+        wiki = g._wiki = WikiBase(current_app.config["WIKI_CONTENT_DIR"])  # noqa: SLF001
     return wiki
 
 

@@ -1,5 +1,5 @@
 # This file is part of Flask-Wiki
-# Copyright (C) 2025 RERO
+# Copyright (C) 2025-2026 RERO
 #
 # Flask-Wiki is free software; you can redistribute it and/or modify
 # it under the terms of the Revised BSD License; see LICENSE file for
@@ -14,7 +14,7 @@ from wtforms.validators import InputRequired
 
 
 class EditorForm(FlaskForm):
-    """."""
+    """WTForms form for creating and editing wiki pages."""
 
     title = StringField(_("Title"), [InputRequired()])
     body = TextAreaField(_("Body"), [InputRequired()])
