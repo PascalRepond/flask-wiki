@@ -1,5 +1,5 @@
 # This file is part of Flask-Wiki
-# Copyright (C) 2025 RERO
+# Copyright (C) 2025-2026 RERO
 #
 # Flask-Wiki is free software; you can redistribute it and/or modify
 # it under the terms of the Revised BSD License; see LICENSE file for
@@ -14,10 +14,13 @@ from .views import blueprint
 
 
 class Wiki:
-    """."""
+    """Flask extension that registers the wiki blueprint and middleware."""
 
     def __init__(self, app=None):
-        """."""
+        """Initialize the extension, optionally binding it to an application.
+
+        :param app: Flask application instance, or None for deferred initialization
+        """
         self.app = app
         if app is not None:
             self.init_app(app)

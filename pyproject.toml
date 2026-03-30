@@ -44,7 +44,30 @@ extend-exclude = ["config.py"]
 line-length = 120
 
 [tool.ruff.lint]
-extend-select = ["A", "C4", "DTZ", "INT", "ISC", "T20", "PIE", "Q", "RET", "SIM", "I", "N", "PERF", "W", "D", "F", "UP", "RUF"]
+extend-select = ["ALL"]
+ignore = [
+    "COM812",  # managed by formatter
+    "ANN", # type annotations are not used in this project
+]
+
+[tool.ruff.lint.per-file-ignores]
+"examples/*.py" = [
+    "INP001",  # not a package, standalone script
+    "S106",    # hardcoded SECRET_KEY="dev" is intentional in examples
+]
+"tests/*.py" = [
+    "S101",    # asserts allowed
+    "S106",    # hardcoded passwords allowed
+    "ARG",     # unused arguments allowed
+    "FBT",     # boolean positional args allowed
+    "INP001",  # pytest discovers tests without __init__.py
+    "PLR2004", # magic values allowed
+    "PLC0415", # imports not at top level allowed (fixtures)
+    "PTH",     # os.path in tests is idiomatic and clear
+]
+"tests/conftest.py" = [
+    "PLC0415", # imports not at top level allowed (fixtures)
+]
 
 [tool.ruff.lint.pydocstyle]
 convention = "pep257"

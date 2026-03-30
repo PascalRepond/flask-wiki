@@ -1,5 +1,5 @@
 # This file is part of Flask-Wiki
-# Copyright (C) 2025 RERO
+# Copyright (C) 2025-2026 RERO
 #
 # Flask-Wiki is free software; you can redistribute it and/or modify
 # it under the terms of the Revised BSD License; see LICENSE file for
@@ -73,7 +73,7 @@ def app(tmp_path_factory):
         wiki.init_search_index()
         wiki.index_all_pages()
 
-    yield app
+    return app
 
 
 @pytest.fixture(scope="module")
@@ -82,14 +82,14 @@ def client(app):
     return app.test_client()
 
 
-@pytest.fixture()
+@pytest.fixture
 def wiki(app):
     """Create a WikiBase instance inside a request context."""
     with app.test_request_context():
         yield WikiBase(app.config["WIKI_CONTENT_DIR"])
 
 
-@pytest.fixture()
+@pytest.fixture
 def png_file():
     """Return a minimal valid PNG as bytes."""
     return TINY_PNG
